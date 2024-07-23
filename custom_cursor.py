@@ -28,7 +28,7 @@ class custom_cursor:
 
         for ax_siblings in list(dict.fromkeys(self.axes_siblings_dict.values())):
             self.last_axes_siblings_index_dict[ax_siblings] = 0
-            self.axes_siblings_annotation[ax_siblings] = ax_siblings[0].annotate(f"Ax : {self.current_ax_siblings_index}", xy = (0.28, 0.9)).draggable()
+            self.axes_siblings_annotation[ax_siblings] = ax_siblings[0].annotate(f"Ax : {self.current_ax_siblings_index}", xy = (0.28, 0.9), xycoords='axes fraction').draggable()
             self.hguides_dict[ax_siblings] = []
             self.vguides_dict[ax_siblings] = []
 
@@ -335,15 +335,15 @@ class custom_cursor:
                             break
                 if create_guide:
                     xdata = event.xdata
-                    self.hguides_dict[self.current_ax_siblings].append(self.current_ax_siblings[0].axvline(ydata, color='k', lw=0.8))
+                    self.vguides_dict[self.current_ax_siblings].append(self.current_ax_siblings[0].axvline(xdata, color='k', lw=0.8))
             self.fig.canvas.draw()
         if event.key == "backspace":
-            for i in range(len(self.hguides_list)):
-                self.hguides_list[0].remove()
-                del self.hguides_list[0]
-            for i in range(len(self.vguides_list)):
-                self.vguides_list[0].remove()
-                del self.vguides_list[0]
+            for i in range(len(self.hguides_dict[self.current_ax_siblings])):
+                self.hguides_dict[self.current_ax_siblings][0].remove()
+                del self.hguides_list[self.current_ax_siblings][0]
+            for i in range(len(self.vguides_dict[self.current_ax_siblings])):
+                self.vguides_dict[self.current_ax_siblings][0].remove()
+                del self.vguides_dict[self.current_ax_siblings][0]
             self.fig.canvas.draw()
         if event.key == "right": 
             self.set_crosshair_visible(False)
@@ -400,7 +400,7 @@ if __name__ == "__main__":
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
 
-    Cursor = custom_cursor(fig, markers_labels_text_dict = {ax1: ("gagougak", "gougou"), ax2: ("ploup", "plip")})
+    Cursor = custom_cursor(fig, markers_labels_text_dict = {ax1: ("N", "s"), ax2: ("N", "s2")})
 
     ax1.plot(N_list, s_list, 'g-', marker = 'o')
     ax2.plot(N_list, s_2_list, 'b-', marker = 'o')
