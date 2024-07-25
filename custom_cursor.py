@@ -88,7 +88,7 @@ class custom_cursor:
             self.set_crosshair_visible(self.toggle_crosshair)
             xdata, ydata = self.current_ax.transData.inverted().transform((event.x, event.y))
 
-            if self.snap_toggle:
+            if self.snap_toggle and self.toggle_crosshair:
 
                 if not(self.xy_list):
                     xlim = self.current_ax.get_xlim()
@@ -96,7 +96,9 @@ class custom_cursor:
                     xdata, ydata = abs(xlim[1]-xlim[0])/2.0, abs(ylim[-1]-ylim[0])/2.0 
                 else:
 
-                    index = self.xy_list.index(min(self.xy_list, key = lambda t : math.dist(t, [xdata, ydata])))
+                    xy_list = [list(self.current_ax.transData.transform(point)) for point in self.xy_list]
+
+                    index = xy_list.index(min(xy_list, key = lambda t : math.dist(t, [event.x, event.y])))
 
                     xdata, ydata = self.xy_list[index]
 
@@ -161,7 +163,7 @@ class custom_cursor:
                     yticks_list = list(target_y_ax.yaxis.get_ticklocs())
                     ylabels_list = list(target_y_ax.yaxis.get_ticklabels())
                     
-                    if self.snap_toggle:
+                    if self.snap_toggle and self.toggle_crosshair:
                         if not(self.xy_list):
                             xlim = target_x_ax_xlim
                             ylim = target_y_ax_ylim
@@ -169,8 +171,8 @@ class custom_cursor:
                             target_point = [xdata, ydata]
                             xtick = target_point[0]
                             ytick = target_point[1]
-                            xlabel = f"{xtick:1.2f}"
-                            ylabel = f"{ytick:1.2f}"
+                            xlabel = f"{xtick:1.2g}"
+                            ylabel = f"{ytick:1.2g}"
                         else:
                             xdata, ydata = target_x_ax.transData.inverted().transform((event.x, event.y))[0], target_y_ax.transData.inverted().transform((event.x, event.y))[1]
                             target_point = min(self.xy_list, key = lambda t : math.dist(t, [xdata, ydata]))
@@ -183,8 +185,8 @@ class custom_cursor:
                         target_point = [xdata, ydata]
                         xtick = target_point[0]
                         ytick = target_point[1]
-                        xlabel = f"{xtick:1.2f}"
-                        ylabel = f"{ytick:1.2f}"
+                        xlabel = f"{xtick:1.2g}"
+                        ylabel = f"{ytick:1.2g}"
                     
                     if (xtick in xticks_list) and (ytick in yticks_list):
                         xticks_list.remove(xtick)
@@ -273,7 +275,9 @@ class custom_cursor:
             else:
                 xdata, ydata = self.current_ax.transData.inverted().transform((event.x, event.y))
 
-                index = self.xy_list.index(min(self.xy_list, key = lambda t : math.dist(t, [xdata, ydata])))
+                xy_list = [list(self.current_ax.transData.transform(point)) for point in self.xy_list]
+
+                index = xy_list.index(min(xy_list, key = lambda t : math.dist(t, [event.x, event.y])))
 
                 xdata, ydata = self.xy_list[index]
 
