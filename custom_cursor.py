@@ -378,8 +378,8 @@ class custom_cursor:
         if event.key == "shift" or event.key == "shift+ctrl":
             self.snap_toggle = False
             xdata, ydata = self.current_ax.transData.inverted().transform((event.x, event.y))
-            self.hcrosshair_dict[self.current_ax].set_ydata(ydata)
-            self.vcrosshair_dict[self.current_ax].set_xdata(xdata)
+            self.hcrosshair_dict[self.current_ax].set_ydata([ydata])
+            self.vcrosshair_dict[self.current_ax].set_xdata([xdata])
             self.crosshair_text_dict[self.current_ax].set_text(f"x={xdata:1.2g}, y={ydata:1.2g}")
             self.fig.canvas.draw()
 
