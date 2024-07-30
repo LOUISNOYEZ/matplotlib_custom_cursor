@@ -1,5 +1,8 @@
 import math
 import matplotlib.pyplot as plt
+from matplotlib import ticker
+from matplotlib.transforms import nonsingular
+import numpy as np
 
 class custom_cursor:
     """ Curstom cursor features:
@@ -25,8 +28,9 @@ class custom_cursor:
         self.markers_labels_text_dict = markers_labels_text_dict
         self.point_annotation_bbox_args = point_annotation_bbox_args
         self.point_annotation_arrow_args = point_annotation_arrow_args
+        self.unique_axes_siblings = list(dict.fromkeys(self.axes_siblings_dict.values()))
 
-        for ax_siblings in list(dict.fromkeys(self.axes_siblings_dict.values())):
+        for ax_siblings in self.unique_axes_siblings:
             self.last_axes_siblings_index_dict[ax_siblings] = 0
             self.axes_siblings_annotation[ax_siblings] = ax_siblings[0].annotate(f"Ax : {self.current_ax_siblings_index}", xy = (0.28, 0.9), xycoords='axes fraction').draggable()
             self.hguides_dict[ax_siblings] = []
@@ -44,9 +48,16 @@ class custom_cursor:
         self.crosshair_text_dict = {ax : None for ax in self.axes}
         self.last_point_index_dict = {ax : None for ax in self.axes}
 
-        
-
         self.point_annotations_dict = {ax : {} for ax in self.axes}
+
+        self.visible_axis_dict = {axes_siblings : [axes_siblings[0].xaxis] + [ax.yaxis for ax in axes_siblings] for axes_siblings in self.unique_axes_siblings}
+        self.custom_ticklists_dict = {axes_siblings : {axis : [] for axis in self.visible_axis_dict[axes_siblings]} for axes_siblings in self.unique_axes_siblings}
+        self.custom_ticklocators_dict = {axes_siblings : {} for axes_siblings in self.unique_axes_siblings}
+        for axes_siblings in self.unique_axes_siblings:
+            for axis in self.visible_axis_dict[axes_siblings]:
+                axis_locator = cursor_locator(self, axis)
+                self.custom_ticklocators_dict[axes_siblings][axis] = axis_locator
+                axis.set_major_locator(axis_locator)
 
         for ax in self.axes:
             # Create crosshair lines and data display text for all axes
@@ -116,30 +127,24 @@ class custom_cursor:
         if event.button == 1:
             if event.dblclick:
                 if not (event.inaxes):
-                    for ax in self.axes:
+                    for ax in self.current_ax_siblings:
                         ax_xlim = ax.get_xlim()
                         ax_ylim = ax.get_ylim()
                         for i in range(len(ax.xaxis.get_ticklabels())):
                             if (ax.xaxis.get_ticklabels()[i].get_window_extent().contains(event.x, event.y)):
                                 xticks_list = list(ax.xaxis.get_ticklocs())
                                 xlabels_list = list(ax.xaxis.get_ticklabels())
-                                del xticks_list[i]
-                                del xlabels_list[i]
-                                ax.set_xticks(xticks_list, labels = xlabels_list)
-                                ax.set_xlim(ax_xlim)
-                                ax.set_ylim(ax_ylim)
-                                self.fig.canvas.draw()
+                                if xticks_list[i] in self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis]:
+                                    self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis].remove(xticks_list[i])
+                                    self.fig.canvas.draw()
                                 break
                         for i in range(len(ax.yaxis.get_ticklabels())):
                             if (ax.yaxis.get_ticklabels()[i].get_window_extent().contains(event.x, event.y)):
                                 yticks_list = list(ax.yaxis.get_ticklocs())
                                 ylabels_list = list(ax.yaxis.get_ticklabels())
-                                del yticks_list[i]
-                                del ylabels_list[i]
-                                ax.set_yticks(yticks_list, labels = ylabels_list)
-                                ax.set_xlim(ax_xlim)
-                                ax.set_ylim(ax_ylim)
-                                self.fig.canvas.draw()
+                                if yticks_list[i] in  self.custom_ticklists_dict[self.current_ax_siblings][ax.yaxis]:
+                                    self.custom_ticklists_dict[self.current_ax_siblings][ax.yaxis].remove(yticks_list[i])
+                                    self.fig.canvas.draw()
                                 break
                 else:
                     target_ax = None
@@ -158,11 +163,6 @@ class custom_cursor:
                         target_x_ax_xlim = target_x_ax.get_xlim()
                         target_y_ax_ylim = target_y_ax.get_ylim()
 
-                    xticks_list = list(target_x_ax.xaxis.get_ticklocs())
-                    xlabels_list = list(target_x_ax.xaxis.get_ticklabels())
-                    yticks_list = list(target_y_ax.yaxis.get_ticklocs())
-                    ylabels_list = list(target_y_ax.yaxis.get_ticklabels())
-                    
                     if self.snap_toggle and self.toggle_crosshair:
                         if not(self.xy_list):
                             xlim = target_x_ax_xlim
@@ -171,42 +171,29 @@ class custom_cursor:
                             target_point = [xdata, ydata]
                             xtick = target_point[0]
                             ytick = target_point[1]
-                            xlabel = f"{xtick:1.2g}"
-                            ylabel = f"{ytick:1.2g}"
                         else:
-                            xdata, ydata = target_x_ax.transData.inverted().transform((event.x, event.y))[0], target_y_ax.transData.inverted().transform((event.x, event.y))[1]
-                            target_point = min(self.xy_list, key = lambda t : math.dist(t, [xdata, ydata]))
+                            xy_list = [list(self.current_ax.transData.transform(point)) for point in self.xy_list]
+                            index = xy_list.index(min(xy_list, key = lambda t : math.dist(t, [event.x, event.y])))
+                            target_point = self.xy_list[index]
                             xtick = target_point[0]
                             ytick = target_point[1]
-                            xlabel = f"{xtick}"
-                            ylabel = f"{ytick}"
                     else:
                         xdata, ydata = target_x_ax.transData.inverted().transform((event.x, event.y))[0], target_y_ax.transData.inverted().transform((event.x, event.y))[1]
                         target_point = [xdata, ydata]
                         xtick = target_point[0]
                         ytick = target_point[1]
-                        xlabel = f"{xtick:1.2g}"
-                        ylabel = f"{ytick:1.2g}"
-                    
-                    if (xtick in xticks_list) and (ytick in yticks_list):
-                        xticks_list.remove(xtick)
-                        xlabels_list = [elt for elt in xlabels_list if not elt.get_text() == xlabel]
-                        yticks_list.remove(ytick)
-                        ylabels_list = [elt for elt in ylabels_list if not elt.get_text() == ylabel]
-                        target_x_ax.set_xticks(xticks_list, labels = xlabels_list)
-                        target_y_ax.set_yticks(yticks_list, labels = ylabels_list)
-                    else:
-                        if (xtick not in xticks_list):
-                            xticks_list.append(xtick)
-                            xlabels_list.append(xlabel)
-                            target_x_ax.set_xticks(xticks_list, labels = xlabels_list)
-                        if (ytick not in yticks_list):
-                            yticks_list.append(ytick)
-                            ylabels_list.append(ylabel)
-                            target_y_ax.set_yticks(yticks_list, labels = ylabels_list)
 
-                    target_x_ax.set_xlim(target_x_ax_xlim)
-                    target_y_ax.set_ylim(target_y_ax_ylim)
+                    xtick = round(xtick, ndigits = 2)
+                    ytick = round(ytick, ndigits = 2)
+                    
+                    if (xtick in self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis]) and (ytick in self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis]):
+                        self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis].remove(xtick)
+                        self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis].remove(ytick)
+                    else:
+                        if (xtick not in self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis]) and not(xtick in self.current_ax_siblings[0].xaxis.get_ticklocs()):
+                            self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis].append(xtick)
+                        if (ytick not in self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis]) and not(ytick in target_y_ax.yaxis.get_ticklocs()):
+                            self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis].append(ytick)
 
                 self.fig.canvas.draw()
         elif event.button == 3:
@@ -236,13 +223,13 @@ class custom_cursor:
                     if self.snap_toggle and self.toggle_crosshair:
 
                         xdata, ydata = self.vcrosshair_dict[self.current_ax].get_xdata()[0], self.hcrosshair_dict[self.current_ax].get_ydata()[0]
-                        transxdata, transydata = self.current_ax_siblings[0].transData.inverted().transform(self.current_ax.transData.transform((xdata, ydata)))
+                        transxdata, transydata = event.inaxes.transData.inverted().transform(self.current_ax.transData.transform((xdata, ydata)))
                         if not ((xdata,ydata) in self.point_annotations_dict[self.current_ax]):
                             if self.current_ax in self.markers_labels_text_dict:
                                 annotation_text = f"{self.markers_labels_text_dict[self.current_ax][0]}: {xdata:1.2g}\n{self.markers_labels_text_dict[self.current_ax][1]}: {ydata:1.2g}"
                             else:
                                 annotation_text = f"x{self.current_ax_siblings_index}: {xdata:1.2g}\ny{self.current_ax_siblings_index}: {ydata:1.2g}"
-                            self.point_annotations_dict[self.current_ax][(xdata,ydata)] = self.current_ax_siblings[0].annotate(annotation_text, xy = (transxdata, transydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()
+                            self.point_annotations_dict[self.current_ax][(xdata,ydata)] = event.inaxes.annotate(annotation_text, xy = (transxdata, transydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()
                         else:
                             self.point_annotations_dict[self.current_ax][(xdata,ydata)].ref_artist.remove()
                             del self.point_annotations_dict[self.current_ax][(xdata, ydata)]
@@ -258,7 +245,9 @@ class custom_cursor:
                                         annotation_text = f"{self.markers_labels_text_dict[ax][0]}: {xdata:1.2g}\n{self.markers_labels_text_dict[ax][1]}: {ydata:1.2g}"
                                     else:
                                         annotation_text = f"x{self.current_ax_siblings_index}: {xdata:1.2g}\ny{self.current_ax_siblings_index}: {ydata:1.2g}"
-                                    self.point_annotations_dict[ax][(xdata,ydata)] = ax.annotate(annotation_text, xy = (xdata, ydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()
+                                    (x, y) = ax.transData.transform((xdata, ydata))
+                                    (new_xdata, new_ydata) = event.inaxes.transData.inverted().transform((x, y))
+                                    self.point_annotations_dict[ax][(xdata,ydata)] = event.inaxes.annotate(annotation_text, xy = (new_xdata, new_ydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()
                                 else:
                                     self.point_annotations_dict[ax][(xdata,ydata)].ref_artist.remove()
                                     del self.point_annotations_dict[ax][(xdata, ydata)]
@@ -313,7 +302,7 @@ class custom_cursor:
                             create_guide = False
                             break
                 if create_guide:
-                    ydata = event.ydata
+                    ydata = self.current_ax_siblings[0].transData.inverted().transform((event.x, event.y))[1]
                     self.hguides_dict[self.current_ax_siblings].append(self.current_ax_siblings[0].axhline(ydata, color='k', lw=0.8))
             self.fig.canvas.draw()
         if event.key == "ctrl+enter" or event.key == "shift+ctrl+enter":
@@ -395,6 +384,41 @@ class custom_cursor:
     def on_exit_axes(self, event):
         self.xy_list = []        
 
+class cursor_locator(ticker.AutoLocator):
+    def __init__(self, cursor, axis):
+        super().__init__()
+        self.set_axis(axis)
+        self.cursor = cursor
+        self.custom_ticklist = cursor.custom_ticklists_dict[cursor.axes_siblings_dict[self.axis.axes]][self.axis]
+    def tick_values(self, vmin, vmax):
+        if self._symmetric:
+            vmax = max(abs(vmin), abs(vmax))
+            vmin = -vmax
+        vmin, vmax = nonsingular(
+            vmin, vmax, expander=1e-13, tiny=1e-14)
+        locs = self._raw_ticks(vmin, vmax)
+
+        prune = self._prune
+        if prune == 'lower':
+            locs = locs[1:]
+        elif prune == 'upper':
+            locs = locs[:-1]
+        elif prune == 'both':
+            locs = locs[1:-1]
+        return self.raise_if_exceeds(locs)
+    def __call__(self):
+        vmin, vmax = self.axis.get_view_interval()
+        ticklocs = list(self.tick_values(vmin, vmax))
+        for custom_tick in self.cursor.custom_ticklists_dict[self.cursor.axes_siblings_dict[self.axis.axes]][self.axis]:
+            for i in range(len(ticklocs)-1):
+                if (custom_tick >= ticklocs[i]) and (custom_tick < ticklocs[i+1]) :
+                    ticklocs.insert(i+1, custom_tick)
+                    break
+        ticklocs = np.array(ticklocs)
+            
+
+        return ticklocs 
+
 if __name__ == "__main__":
 
     N_list = list(range(1, 30))
@@ -404,10 +428,12 @@ if __name__ == "__main__":
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
 
-    Cursor = custom_cursor(fig, markers_labels_text_dict = {ax1: ("N", "s"), ax2: ("N", "s2")})
 
     ax1.plot(N_list, s_list, 'g-', marker = 'o')
     ax2.plot(N_list, s_2_list, 'b-', marker = 'o')
+
+    Cursor = custom_cursor(fig, markers_labels_text_dict = {ax1: ("N", "s"), ax2: ("N", "s2")})
+
 
     fig.canvas.mpl_connect('button_press_event', Cursor.on_mouse_click)
     fig.canvas.mpl_connect('motion_notify_event', Cursor.on_mouse_move)

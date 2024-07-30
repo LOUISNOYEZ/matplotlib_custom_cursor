@@ -1,0 +1,243 @@
+[1mdiff --git a/custom_cursor.py b/custom_cursor.py[m
+[1mindex 9fd2c50..30fddc2 100644[m
+[1m--- a/custom_cursor.py[m
+[1m+++ b/custom_cursor.py[m
+[36m@@ -1,5 +1,8 @@[m
+ import math[m
+ import matplotlib.pyplot as plt[m
+[32m+[m[32mfrom matplotlib import ticker[m
+[32m+[m[32mfrom matplotlib.transforms import nonsingular[m
+[32m+[m[32mimport numpy as np[m
+ [m
+ class custom_cursor:[m
+     """ Curstom cursor features:[m
+[36m@@ -25,8 +28,9 @@[m [mclass custom_cursor:[m
+         self.markers_labels_text_dict = markers_labels_text_dict[m
+         self.point_annotation_bbox_args = point_annotation_bbox_args[m
+         self.point_annotation_arrow_args = point_annotation_arrow_args[m
+[32m+[m[32m        self.unique_axes_siblings = list(dict.fromkeys(self.axes_siblings_dict.values()))[m
+ [m
+[31m-        for ax_siblings in list(dict.fromkeys(self.axes_siblings_dict.values())):[m
+[32m+[m[32m        for ax_siblings in self.unique_axes_siblings:[m
+             self.last_axes_siblings_index_dict[ax_siblings] = 0[m
+             self.axes_siblings_annotation[ax_siblings] = ax_siblings[0].annotate(f"Ax : {self.current_ax_siblings_index}", xy = (0.28, 0.9), xycoords='axes fraction').draggable()[m
+             self.hguides_dict[ax_siblings] = [][m
+[36m@@ -44,10 +48,17 @@[m [mclass custom_cursor:[m
+         self.crosshair_text_dict = {ax : None for ax in self.axes}[m
+         self.last_point_index_dict = {ax : None for ax in self.axes}[m
+ [m
+[31m-        [m
+[31m-[m
+         self.point_annotations_dict = {ax : {} for ax in self.axes}[m
+ [m
+[32m+[m[32m        self.visible_axis_dict = {axes_siblings : [axes_siblings[0].xaxis] + [ax.yaxis for ax in axes_siblings] for axes_siblings in self.unique_axes_siblings}[m
+[32m+[m[32m        self.custom_ticklists_dict = {axes_siblings : {axis : [] for axis in self.visible_axis_dict[axes_siblings]} for axes_siblings in self.unique_axes_siblings}[m
+[32m+[m[32m        self.custom_ticklocators_dict = {axes_siblings : {} for axes_siblings in self.unique_axes_siblings}[m
+[32m+[m[32m        for axes_siblings in self.unique_axes_siblings:[m
+[32m+[m[32m            for axis in self.visible_axis_dict[axes_siblings]:[m
+[32m+[m[32m                axis_locator = cursor_locator(self, axis)[m
+[32m+[m[32m                self.custom_ticklocators_dict[axes_siblings][axis] = axis_locator[m
+[32m+[m[32m                axis.set_major_locator(axis_locator)[m
+[32m+[m
+         for ax in self.axes:[m
+             # Create crosshair lines and data display text for all axes[m
+             self.hcrosshair_dict[ax] = ax.axhline(ax.get_ylim()[0], color="k", lw = 0.8, ls="--")[m
+[36m@@ -116,30 +127,24 @@[m [mclass custom_cursor:[m
+         if event.button == 1:[m
+             if event.dblclick:[m
+                 if not (event.inaxes):[m
+[31m-                    for ax in self.axes:[m
+[32m+[m[32m                    for ax in self.current_ax_siblings:[m
+                         ax_xlim = ax.get_xlim()[m
+                         ax_ylim = ax.get_ylim()[m
+                         for i in range(len(ax.xaxis.get_ticklabels())):[m
+                             if (ax.xaxis.get_ticklabels()[i].get_window_extent().contains(event.x, event.y)):[m
+                                 xticks_list = list(ax.xaxis.get_ticklocs())[m
+                                 xlabels_list = list(ax.xaxis.get_ticklabels())[m
+[31m-                                del xticks_list[i][m
+[31m-                                del xlabels_list[i][m
+[31m-                                ax.set_xticks(xticks_list, labels = xlabels_list)[m
+[31m-                                ax.set_xlim(ax_xlim)[m
+[31m-                                ax.set_ylim(ax_ylim)[m
+[31m-                                self.fig.canvas.draw()[m
+[32m+[m[32m                                if xticks_list[i] in self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis]:[m
+[32m+[m[32m                                    self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis].remove(xticks_list[i])[m
+[32m+[m[32m                                    self.fig.canvas.draw()[m
+                                 break[m
+                         for i in range(len(ax.yaxis.get_ticklabels())):[m
+                             if (ax.yaxis.get_ticklabels()[i].get_window_extent().contains(event.x, event.y)):[m
+                                 yticks_list = list(ax.yaxis.get_ticklocs())[m
+                                 ylabels_list = list(ax.yaxis.get_ticklabels())[m
+[31m-                                del yticks_list[i][m
+[31m-                                del ylabels_list[i][m
+[31m-                                ax.set_yticks(yticks_list, labels = ylabels_list)[m
+[31m-                                ax.set_xlim(ax_xlim)[m
+[31m-                                ax.set_ylim(ax_ylim)[m
+[31m-                                self.fig.canvas.draw()[m
+[32m+[m[32m                                if yticks_list[i] in  self.custom_ticklists_dict[self.current_ax_siblings][ax.yaxis]:[m
+[32m+[m[32m                                    self.custom_ticklists_dict[self.current_ax_siblings][ax.yaxis].remove(yticks_list[i])[m
+[32m+[m[32m                                    self.fig.canvas.draw()[m
+                                 break[m
+                 else:[m
+                     target_ax = None[m
+[36m@@ -158,11 +163,6 @@[m [mclass custom_cursor:[m
+                         target_x_ax_xlim = target_x_ax.get_xlim()[m
+                         target_y_ax_ylim = target_y_ax.get_ylim()[m
+ [m
+[31m-                    xticks_list = list(target_x_ax.xaxis.get_ticklocs())[m
+[31m-                    xlabels_list = list(target_x_ax.xaxis.get_ticklabels())[m
+[31m-                    yticks_list = list(target_y_ax.yaxis.get_ticklocs())[m
+[31m-                    ylabels_list = list(target_y_ax.yaxis.get_ticklabels())[m
+[31m-                    [m
+                     if self.snap_toggle and self.toggle_crosshair:[m
+                         if not(self.xy_list):[m
+                             xlim = target_x_ax_xlim[m
+[36m@@ -171,42 +171,29 @@[m [mclass custom_cursor:[m
+                             target_point = [xdata, ydata][m
+                             xtick = target_point[0][m
+                             ytick = target_point[1][m
+[31m-                            xlabel = f"{xtick:1.2g}"[m
+[31m-                            ylabel = f"{ytick:1.2g}"[m
+                         else:[m
+[31m-                            xdata, ydata = target_x_ax.transData.inverted().transform((event.x, event.y))[0], target_y_ax.transData.inverted().transform((event.x, event.y))[1][m
+[31m-                            target_point = min(self.xy_list, key = lambda t : math.dist(t, [xdata, ydata]))[m
+[32m+[m[32m                            xy_list = [list(self.current_ax.transData.transform(point)) for point in self.xy_list][m
+[32m+[m[32m                            index = xy_list.index(min(xy_list, key = lambda t : math.dist(t, [event.x, event.y])))[m
+[32m+[m[32m                            target_point = self.xy_list[index][m
+                             xtick = target_point[0][m
+                             ytick = target_point[1][m
+[31m-                            xlabel = f"{xtick}"[m
+[31m-                            ylabel = f"{ytick}"[m
+                     else:[m
+                         xdata, ydata = target_x_ax.transData.inverted().transform((event.x, event.y))[0], target_y_ax.transData.inverted().transform((event.x, event.y))[1][m
+                         target_point = [xdata, ydata][m
+                         xtick = target_point[0][m
+                         ytick = target_point[1][m
+[31m-                        xlabel = f"{xtick:1.2g}"[m
+[31m-                        ylabel = f"{ytick:1.2g}"[m
+[32m+[m
+[32m+[m[32m                    xtick = round(xtick, ndigits = 2)[m
+[32m+[m[32m                    ytick = round(ytick, ndigits = 2)[m
+                     [m
+[31m-                    if (xtick in xticks_list) and (ytick in yticks_list):[m
+[31m-                        xticks_list.remove(xtick)[m
+[31m-                        xlabels_list = [elt for elt in xlabels_list if not elt.get_text() == xlabel][m
+[31m-                        yticks_list.remove(ytick)[m
+[31m-                        ylabels_list = [elt for elt in ylabels_list if not elt.get_text() == ylabel][m
+[31m-                        target_x_ax.set_xticks(xticks_list, labels = xlabels_list)[m
+[31m-                        target_y_ax.set_yticks(yticks_list, labels = ylabels_list)[m
+[32m+[m[32m                    if (xtick in self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis]) and (ytick in self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis]):[m
+[32m+[m[32m                        self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis].remove(xtick)[m
+[32m+[m[32m                        self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis].remove(ytick)[m
+                     else:[m
+[31m-                        if (xtick not in xticks_list):[m
+[31m-                            xticks_list.append(xtick)[m
+[31m-                            xlabels_list.append(xlabel)[m
+[31m-                            target_x_ax.set_xticks(xticks_list, labels = xlabels_list)[m
+[31m-                        if (ytick not in yticks_list):[m
+[31m-                            yticks_list.append(ytick)[m
+[31m-                            ylabels_list.append(ylabel)[m
+[31m-                            target_y_ax.set_yticks(yticks_list, labels = ylabels_list)[m
+[31m-[m
+[31m-                    target_x_ax.set_xlim(target_x_ax_xlim)[m
+[31m-                    target_y_ax.set_ylim(target_y_ax_ylim)[m
+[32m+[m[32m                        if (xtick not in self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis]) and not(xtick in self.current_ax_siblings[0].xaxis.get_ticklocs()):[m
+[32m+[m[32m                            self.custom_ticklists_dict[self.current_ax_siblings][self.current_ax_siblings[0].xaxis].append(xtick)[m
+[32m+[m[32m                        if (ytick not in self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis]) and not(ytick in target_y_ax.yaxis.get_ticklocs()):[m
+[32m+[m[32m                            self.custom_ticklists_dict[self.current_ax_siblings][target_y_ax.yaxis].append(ytick)[m
+ [m
+                 self.fig.canvas.draw()[m
+         elif event.button == 3:[m
+[36m@@ -236,13 +223,13 @@[m [mclass custom_cursor:[m
+                     if self.snap_toggle and self.toggle_crosshair:[m
+ [m
+                         xdata, ydata = self.vcrosshair_dict[self.current_ax].get_xdata()[0], self.hcrosshair_dict[self.current_ax].get_ydata()[0][m
+[31m-                        transxdata, transydata = self.current_ax_siblings[0].transData.inverted().transform(self.current_ax.transData.transform((xdata, ydata)))[m
+[32m+[m[32m                        transxdata, transydata = event.inaxes.transData.inverted().transform(self.current_ax.transData.transform((xdata, ydata)))[m
+                         if not ((xdata,ydata) in self.point_annotations_dict[self.current_ax]):[m
+                             if self.current_ax in self.markers_labels_text_dict:[m
+                                 annotation_text = f"{self.markers_labels_text_dict[self.current_ax][0]}: {xdata:1.2g}\n{self.markers_labels_text_dict[self.current_ax][1]}: {ydata:1.2g}"[m
+                             else:[m
+                                 annotation_text = f"x{self.current_ax_siblings_index}: {xdata:1.2g}\ny{self.current_ax_siblings_index}: {ydata:1.2g}"[m
+[31m-                            self.point_annotations_dict[self.current_ax][(xdata,ydata)] = self.current_ax_siblings[0].annotate(annotation_text, xy = (transxdata, transydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()[m
+[32m+[m[32m                            self.point_annotations_dict[self.current_ax][(xdata,ydata)] = event.inaxes.annotate(annotation_text, xy = (transxdata, transydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()[m
+                         else:[m
+                             self.point_annotations_dict[self.current_ax][(xdata,ydata)].ref_artist.remove()[m
+                             del self.point_annotations_dict[self.current_ax][(xdata, ydata)][m
+[36m@@ -258,7 +245,9 @@[m [mclass custom_cursor:[m
+                                         annotation_text = f"{self.markers_labels_text_dict[ax][0]}: {xdata:1.2g}\n{self.markers_labels_text_dict[ax][1]}: {ydata:1.2g}"[m
+                                     else:[m
+                                         annotation_text = f"x{self.current_ax_siblings_index}: {xdata:1.2g}\ny{self.current_ax_siblings_index}: {ydata:1.2g}"[m
+[31m-                                    self.point_annotations_dict[ax][(xdata,ydata)] = ax.annotate(annotation_text, xy = (xdata, ydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()[m
+[32m+[m[32m                                    (x, y) = ax.transData.transform((xdata, ydata))[m
+[32m+[m[32m                                    (new_xdata, new_ydata) = event.inaxes.transData.inverted().transform((x, y))[m
+[32m+[m[32m                                    self.point_annotations_dict[ax][(xdata,ydata)] = event.inaxes.annotate(annotation_text, xy = (new_xdata, new_ydata), bbox = self.point_annotation_bbox_args, arrowprops = self.point_annotation_arrow_args).draggable()[m
+                                 else:[m
+                                     self.point_annotations_dict[ax][(xdata,ydata)].ref_artist.remove()[m
+                                     del self.point_annotations_dict[ax][(xdata, ydata)][m
+[36m@@ -313,7 +302,7 @@[m [mclass custom_cursor:[m
+                             create_guide = False[m
+                             break[m
+                 if create_guide:[m
+[31m-                    ydata = event.ydata[m
+[32m+[m[32m                    ydata = self.current_ax_siblings[0].transData.inverted().transform((event.x, event.y))[1][m
+                     self.hguides_dict[self.current_ax_siblings].append(self.current_ax_siblings[0].axhline(ydata, color='k', lw=0.8))[m
+             self.fig.canvas.draw()[m
+         if event.key == "ctrl+enter" or event.key == "shift+ctrl+enter":[m
+[36m@@ -395,6 +384,41 @@[m [mclass custom_cursor:[m
+     def on_exit_axes(self, event):[m
+         self.xy_list = []        [m
+ [m
+[32m+[m[32mclass cursor_locator(ticker.AutoLocator):[m
+[32m+[m[32m    def __init__(self, cursor, axis):[m
+[32m+[m[32m        super().__init__()[m
+[32m+[m[32m        self.set_axis(axis)[m
+[32m+[m[32m        self.cursor = cursor[m
+[32m+[m[32m        self.custom_ticklist = cursor.custom_ticklists_dict[cursor.axes_siblings_dict[self.axis.axes]][self.axis][m
+[32m+[m[32m    def tick_values(self, vmin, vmax):[m
+[32m+[m[32m        if self._symmetric:[m
+[32m+[m[32m            vmax = max(abs(vmin), abs(vmax))[m
+[32m+[m[32m            vmin = -vmax[m
+[32m+[m[32m        vmin, vmax = nonsingular([m
+[32m+[m[32m            vmin, vmax, expander=1e-13, tiny=1e-14)[m
+[32m+[m[32m        locs = self._raw_ticks(vmin, vmax)[m
+[32m+[m
+[32m+[m[32m        prune = self._prune[m
+[32m+[m[32m        if prune == 'lower':[m
+[32m+[m[32m            locs = locs[1:][m
+[32m+[m[32m        elif prune == 'upper':[m
+[32m+[m[32m            locs = locs[:-1][m
+[32m+[m[32m        elif prune == 'both':[m
+[32m+[m[32m            locs = locs[1:-1][m
+[32m+[m[32m        return self.raise_if_exceeds(locs)[m
+[32m+[m[32m    def __call__(self):[m
+[32m+[m[32m        vmin, vmax = self.axis.get_view_interval()[m
+[32m+[m[32m        ticklocs = list(self.tick_values(vmin, vmax))[m
+[32m+[m[32m        for custom_tick in self.cursor.custom_ticklists_dict[self.cursor.axes_siblings_dict[self.axis.axes]][self.axis]:[m
+[32m+[m[32m            for i in range(len(ticklocs)-1):[m
+[32m+[m[32m                if (custom_tick >= ticklocs[i]) and (custom_tick < ticklocs[i+1]) :[m
+[32m+[m[32m                    ticklocs.insert(i+1, custom_tick)[m
+[32m+[m[32m                    break[m
+[32m+[m[32m        ticklocs = np.array(ticklocs)[m
+[32m+[m[41m            [m
+[32m+[m
+[32m+[m[32m        return ticklocs[m[41m [m
+[32m+[m
+ if __name__ == "__main__":[m
+ [m
+     N_list = list(range(1, 30))[m
+[36m@@ -404,11 +428,13 @@[m [mif __name__ == "__main__":[m
+     fig, ax1 = plt.subplots()[m
+     ax2 = ax1.twinx()[m
+ [m
+[31m-    Cursor = custom_cursor(fig, markers_labels_text_dict = {ax1: ("N", "s"), ax2: ("N", "s2")})[m
+ [m
+     ax1.plot(N_list, s_list, 'g-', marker = 'o')[m
+     ax2.plot(N_list, s_2_list, 'b-', marker = 'o')[m
+ [m
+[32m+[m[32m    Cursor = custom_cursor(fig, markers_labels_text_dict = {ax1: ("N", "s"), ax2: ("N", "s2")})[m
+[32m+[m
+[32m+[m
+     fig.canvas.mpl_connect('button_press_event', Cursor.on_mouse_click)[m
+     fig.canvas.mpl_connect('motion_notify_event', Cursor.on_mouse_move)[m
+     fig.canvas.mpl_connect('axes_enter_event', Cursor.on_enter_axes)[m
